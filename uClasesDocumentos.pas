@@ -1106,6 +1106,9 @@ TPedidoDeVentaList = class(TDocumentoList)
                                                    _EsParaNotaDeDebito : Boolean;
                                                    _Local: Boolean;
                                                    _Exportacion: Boolean);
+
+
+
     constructor CreateByEstadoAndUsuarioDeAlta(_Est: TEstadoDePedidoDeVenta;_Usu: TUsuario);
     constructor CreateByGrupoDeVendedores(_G: TGrupoDeVendedor);
     constructor CreateByMarca(_M: TMarca);
@@ -1477,6 +1480,7 @@ TPedidoDeVentaItem = class(TPDObject)
     Procedure ValidarFechas;
     procedure AgregarNuevoEstadoAlLog;
     procedure RecalcularFechaDeFinDeFabricacion;
+    Function RecotizarProducto: TReal;
 
     // SAVE
     Function Save: Boolean; Override;
@@ -1496,6 +1500,8 @@ TPedidoDeVentaItem = class(TPDObject)
     Class Function ObtenerLaFechaDeIngresoRealAExpedicion( _PVIID: TObjectID ): TDateTime;
     // cantidades
     function CantidadFacturadaALaFecha(_FechaHasta : TDateTime = 0 ): TEntero;
+    Function Stock(_CodigoEstado : String)  : TReal;
+    Procedure DesAsignarStock;
     property CantidadPedida        : TReal read FCantidadPedida  Write FCantidadPedida;
     property CantidadEntregadaHistorica : TReal read FCantidadEntregadaHistorica write FCantidadEntregadaHistorica; // esta property es para dar por cumplido los items que no tiene remitos en Aphosoft
     property CantidadCancelada     : TReal read FCantidadCancelada write FCantidadCancelada;
@@ -1504,8 +1510,6 @@ TPedidoDeVentaItem = class(TPDObject)
     property CantidadEntregada     : TReal read GetCantidadEntregada;
     property CantidadFacturada     : TReal read GetCantidadFacturada;
     property CantidadPendiente     : TReal read FCantidadPendiente;
-    Function Stock(_CodigoEstado : String)  : TReal;
-    Procedure DesAsignarStock;
     // properties del Pedido de ventaItems
     property PedidoDeVentaID: TObjectID read FPedidoDeVentaID write SetPedidoDeVentaID;
     property PedidoDeVenta : TPedidoDeVenta read GetPedidoDeVenta;
@@ -1535,8 +1539,6 @@ TPedidoDeVentaItem = class(TPDObject)
     property FechaDeVentaAnterior: TFecha read GetFechaVentaAnterior;
     property DetalleDePrecios: TPedidoDeVentaItemPrecioDeListaList read GetDetalleDePrecios;
     property DetalleDePreciosExigidosSinPrecio: TPedidoDeVentaItemPrecioDeListaList read GetDetalleDePreciosExigidosSinPrecio;
-
-
     Property TiempoEstimadoProduccion: TEntero read GetTiempoEstimadoProduccion;
     property PorcentajeAnticipo : TReal read FporcentajeAnticipo write FporcentajeAnticipo;
     property PorcentajeDescuento: TReal read FporcentajeDescuento write FporcentajeDescuento;
@@ -1544,7 +1546,6 @@ TPedidoDeVentaItem = class(TPDObject)
     property EsCunioNuevo: TBoolean Read FEsCunioNuevo write FEsCunioNuevo;
     property EntregaModificable : Boolean read FEntregaModificable Write FEntregaModificable;
     property ColorTemporal: Integer Read FColorTemporal Write FColorTemporal;
-
     property NumHojaDeRuta: string read FNumHojaDeRuta write FNumHojaDeRuta;
     property CantidadHojaDeRuta: Real read fCantidadHojaDeRuta write fCantidadHojaDeRuta;
     property FechaDeIngresoHojaDeRuta : Tdate read fFechaDeIngresoHojaDeRuta write fFechaDeIngresoHojaDeRuta;
@@ -10278,14 +10279,6 @@ constructor TPedidoDeVentaList.CreateByNumeroDesdeNumeroHasta(_NumeroDesde: Inte
       end;
   end;
 
-  Function CondicionVendedor : String;
-  begin
-    if Aplicacion.Usuario.EsVendedor then
-      Result := '( ' + TPedidoDeVentaDM.TableName + '.' + TPedidoDeVentaDM._GrupoDeVendedorID + ' in (Select' + TGrupoDeVendedorItemDM._GrupoDeVendedorID + ' from ' +
-                TGrupoDeVendedorItemDM.TableName + ' where ' + TGrupoDeVendedorItemDM._VendedorID + ' = ' + IntToStr(Aplicacion.Usuario.VendedorID) + '))';
-
-  end;
-
   Function Orden: String;
   begin
     Result := TPedidoDeVentaDM.TableName+'.'+ TPedidoDeVentaDM._FechaReal;
@@ -11912,6 +11905,24 @@ end;
 procedure TPedidoDeVentaItem.RecalcularFechaDeFinDeFabricacion;
 begin
   FFechaDeFinDeFabricacion := Null;
+end;
+
+function TPedidoDeVentaItem.RecotizarProducto: TReal;
+var
+  NuevoPrecioDeLista    : TReal;
+  NuevoDetalleDePrecios : TPedidoDeVentaItemPrecioDeListaList;
+begin
+  NuevoPrecioDeLista := 0;
+  GetList(TPDList(NuevoDetalleDePrecios), TPDList(TPedidoDeVentaItemPrecioDeListaList.CreateByPedidoDeVentaItem(Self)));
+
+  DetalleDePrecios.first;
+  While Not DetalleDePrecios.IsLast do
+    Begin
+      NuevoPrecioDeLista := NuevoPrecioDeLista + NuevoDetalleDePrecios.Actual.Precio;
+      DetalleDePrecios.Next;
+    End;
+  NuevoPrecioDeLista := Aplicacion.MathService.Redondear(NuevoPrecioDeLista, 5);
+  Result := NuevoPrecioDeLista;
 end;
 
 procedure TPedidoDeVentaItem.ValidarFechas;
